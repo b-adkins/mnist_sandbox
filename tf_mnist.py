@@ -1,7 +1,30 @@
+import os
+import sys
+
+def usage(exe_name):
+  print('''Usage: {} [FLAG] PATH
+FLAG:
+-t, --train    If present, will train model and save it to PATH
+PATH           Path to load model from otherwise
+  '''.format(os.path.basename(exe_name)))
+
+# Simple command line argument parse
+if len(sys.argv) > 2 and sys.argv[1] in ["--train", "-t"]:
+  train_model = True
+  model_path = sys.argv[2]
+elif len(sys.argv) > 1:
+  train_model = False
+  model_path = sys.argv[1]
+else:
+  print(usage(sys.argv[0]))
+  sys.exit(2)
+
+
+# These are slow, doing them after arg parsing
+import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
-import tensorflow as tf
 
 def weight_variable(shape):
   initial = tf.truncated_normal(shape, stddev=0.1)
@@ -54,23 +77,31 @@ train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+
+saver = tf.train.Saver()
+
+
 with tf.Session() as sess:
-    tf.global_variables_initializer().run()
+    if train_model:
+        tf.global_variables_initializer().run()
+        
+        # Train
+        for i in range(2200):
+            batch_xs, batch_ys = mnist.train.next_batch(100)
+            if(i % 100 == 0):
+                train_accuracy = accuracy.eval(feed_dict={
+                    x: batch_xs, y_: batch_ys, keep_prob: 1.0})
+                print("step {}, accuracy {}".format(i, train_accuracy))
+            sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.5})
+        
+        # Save first, just in cases something goes wrong
+        saver.save(sess, model_path)
+        
+        # Test
+        print(sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
 
-
-    # Train
-    for i in range(20000):
-        batch_xs, batch_ys = mnist.train.next_batch(100)
-        if(i % 100 == 0):
-            train_accuracy = accuracy.eval(feed_dict={
-                x: batch_xs, y_: batch_ys, keep_prob: 1.0})
-            print("step {}, accuracy {}".format(i, train_accuracy))
-        sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.5})
-
-    # Test
-    print(sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
-
-
+    else:
+        saver.restore(sess, model_path)
 
 
 import imageio
